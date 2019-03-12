@@ -76,6 +76,8 @@ bool thread_compare(const struct list_elem* e1, const struct list_elem* e2, void
 static int uno = INT_TO_FIXPOINT(1,1);
 static int dos = INT_TO_FIXPOINT(2,1);
 static int cuatro = INT_TO_FIXPOINT(4,1);
+static int cien = INT_TO_FIXPOINT(100,1);
+static int maxima_p= INT_TO_FIXPOINT(PRI_MAX,1);
 static int const1 = INT_TO_FIXPOINT(59, 60);	// *** 3
 static int const2 = INT_TO_FIXPOINT(1, 60);	// *** 4
 static int load_avg = 0;			// *** 5
@@ -142,17 +144,20 @@ thread_tick (void)
       int ready_threads_pf = INT_TO_FIXPOINT(ready_threads, 1);	// *** 10 convertido a formato de punto fijo
     
       load_avg = MULT_FP(const1, load_avg) + MULT_FP(const2, ready_threads_pf); // *** 11
-      
+
+      // Actualizamos el recent_cpu de cada thread.
       struct list_elem* e;
-      for (e = list_begin(&ready_list); e != list_end(&ready_list); e = list_next(e)){
+      for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)){
 	struct thread* m = list_entry(e, struct thread, elem);
-	m-> recent_cpu = MULT_FP(DIV_FP(MULT_FP(dos, load_avg),
-				        MULT_FP(dos, load_avg) + uno),
-				 m-> recent_cpu) + INT_TO_FIXPOINT(m->nice,1);
+	m-> recent_cpu = MULT_FP(DIV_FP(MULT_FP(dos, INT_TO_FIXPOINT(load_avg,1)),
+					MULT_FP(dos, INT_TO_FIXPOINT(load_avg,1)) + uno),INT_TO_FIXPOINT(m->recent_cpu,1))
+	  + INT_TO_FIXPOINT(m->nice,1);
       }
     }
+
+  // Actualizamos la prioridad del thread actual
   if(timer_ticks() % 4 == 0){
-    t->priority = INT_TO_FIXPOINT(PRI_MAX,1) - DIV_FP(INT_TO_FIXPOINT(t->recent_cpu, 1), cuatro) -
+    t->priority = maxima_p - DIV_FP(INT_TO_FIXPOINT(t->recent_cpu, 1), cuatro) -
                                                MULT_FP(dos, INT_TO_FIXPOINT(t->nice,1));
   }
   
@@ -396,7 +401,8 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   /* Not yet implemented. */
-  thread_current ()->nice = nice;
+  int aux = INT_TO_FIXPOINT(nice,1);
+  thread_current()->nice = aux;
 }
 
 /* Returns the current thread's nice value. */
@@ -404,7 +410,7 @@ int
 thread_get_nice (void) 
 {
   /* Not yet implemented. */
-  return thread_current ()->nice;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -412,9 +418,7 @@ int
 thread_get_load_avg (void) 
 {
   /* Not yet implemented. */
-  int cien = INT_TO_FIXPOINT(100, 1);	// *** 12 - P3
-  int tmp = MULT_FP(load_avg, cien);	// *** 11
-  
+  int tmp = MULT_FP(cien, load_avg);	// *** 11
   return FIXPOINT_TO_INT(tmp);		// *** 13 
 }
 
@@ -424,9 +428,9 @@ int
 thread_get_recent_cpu (void) 
 {
   /* Not yet implemented. */
-    int cien = INT_TO_FIXPOINT(100, 1);
-    int tmp = MULT_FP(thread_current ()->recent_cpu, cien);
-    return FIXPOINT_TO_INT(tmp);
+  int aux = thread_current()->recent_cpu;
+  int tmp = MULT_FP(cien, aux);
+  return FIXPOINT_TO_INT(tmp);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
