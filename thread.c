@@ -73,6 +73,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 bool thread_compare(const struct list_elem* e1, const struct list_elem* e2, void* aux UNUSED);
+void thread_recent_cpu(struct thread *t);
 static int uno = INT_TO_FIXPOINT(1,1);
 static int dos = INT_TO_FIXPOINT(2,1);
 static int cuatro = INT_TO_FIXPOINT(4,1);
@@ -128,14 +129,38 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
+// Función de comparación para poder agregar a la lista
+bool
+thread_compare(const struct list_elem* e1, const struct list_elem* e2, void* aux UNUSED){
+  struct thread* t1 = list_entry(e1, struct thread, elem);
+  struct thread* t2 = list_entry(e2, struct thread, elem);
+
+  return t1-> priority > t2->priority;
+}
+
+// Función que calcula el recent_cpu
+void
+thread_recent_cpu(struct thread *t){
+  t-> recent_cpu = MULT_FP(DIV_FP(MULT_FP(dos, load_avg),
+				  MULT_FP(dos, load_avg) + uno),t->recent_cpu)
+    + t->nice;
+}
+
+// Función que calcula la prioridad de un thread
+void
+thread_priority(struct thread *t){
+  t->priority = maxima_p - DIV_FP(t->recent_cpu, cuatro) -
+    MULT_FP(dos, t->nice);
+  
+}
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
-  t-> recent_cpu = FIXPOINT_TO_INT(INT_TO_FIXPOINT(t-> recent_cpu, 1) + uno);  // Actualizamos el recent_cpu del thread actual
-  if (timer_ticks() % TIMER_FREQ == 0) // *** 6 estamos en múltiplo de 1 segundo
+  t-> recent_cpu = t->recent_cpu + uno;  // Actualizamos el recent_cpu del thread actual
+  if (timer_ticks() % TIMER_FREQ == 0)                    // *** 6 estamos en múltiplo de 1 segundo
     {	
       int ready_threads = list_size(&ready_list);	// *** 7 recorre toda la lista y cuenta el número de nodos 
       if (t != idle_thread) 			        // *** 8 si el thread no es el idle
@@ -146,19 +171,14 @@ thread_tick (void)
       load_avg = MULT_FP(const1, load_avg) + MULT_FP(const2, ready_threads_pf); // *** 11
 
       // Actualizamos el recent_cpu de cada thread.
-      struct list_elem* e;
-      for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)){
-	struct thread* m = list_entry(e, struct thread, elem);
-	m-> recent_cpu = MULT_FP(DIV_FP(MULT_FP(dos, INT_TO_FIXPOINT(load_avg,1)),
-					MULT_FP(dos, INT_TO_FIXPOINT(load_avg,1)) + uno),INT_TO_FIXPOINT(m->recent_cpu,1))
-	  + INT_TO_FIXPOINT(m->nice,1);
-      }
+      thread_foreach(thread_recent_cpu, NULL);
+      
     }
 
   // Actualizamos la prioridad del thread actual
-  if(timer_ticks() % 4 == 0){
-    t->priority = maxima_p - DIV_FP(INT_TO_FIXPOINT(t->recent_cpu, 1), cuatro) -
-                                               MULT_FP(dos, INT_TO_FIXPOINT(t->nice,1));
+  if(timer_ticks() % 4 == 0)
+    {
+      thread_foreach(thread_priority, NULL);
   }
   
   /* Update statistics. */
@@ -632,14 +652,8 @@ allocate_tid (void)
   return tid;
 }
 
-// Firma de la función de comparación para poder agregar a la lista
-bool
-thread_compare(const struct list_elem* e1, const struct list_elem* e2, void* aux UNUSED){
-  struct thread* t1 = list_entry(e1, struct thread, elem);
-  struct thread* t2 = list_entry(e2, struct thread, elem);
 
-  return t1-> priority > t2->priority;
-}
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
