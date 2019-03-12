@@ -1,1 +1,9 @@
-Aquí están mis archivos pa' las pruebas
+1.  ¿Por qué no utilizamos para el valor load_average simplemente el número de threads de la ready_list?
+  Porque no sólo nos interesa conocer la cantidad de threads que están listos para ejecutarse, si no que, necesitamos conocer la carga promedio de trabajo del procesador según cierto tiempo, en este caso, en el último segundo. Es decir, necesitamos considerar el tiempo y no sólo la cantidad de threads. 
+
+2. ¿Por qué razón al utilizar el módulo de punto flotante en modo kernel vuelve más lento al kernel?
+  El uso de un punto flotante dentro del kernel requiere guardar y restaurar manualmente los registros de punto flotante, entre otras tareas posibles. Además, el kernel, particularmente no necesita operaciones de punto flotante, y también necesita ejecutarse en arquitecturas que carecen de FPU en absoluto. Por lo tanto, el kernel apaga el PFU. 
+Así que, si un programa va a utilizarlo, quedará atrapado en el kernel, el kernel activará la FPU, restaurará cualquier estado guardado que ya exista y luego volverá a ejecutar la operación de la FPU. En el momento del cambio de contexto, sabe que realmente debe pasar por la lógica de guardado del estado. (Y luego puede volver a apagar la FPU).
+
+3. Para calcular el recent_cpu es posible utilizar un arreglo de n elementos, donde en cada casilla del arreglo se guarda el tiempo utilizado por el thread en ese instante. ¿Por qué no utilizamos la anterior estrategia?
+  Es más complicado obtener las referencias del valor del recent_cpu anterior para calcular el recent_cpu actual. Además, aumenta la complejidad en espacio. 
