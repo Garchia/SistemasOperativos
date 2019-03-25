@@ -11,8 +11,6 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "threads/fixpoint.h"	     // *** 1
-#include "devices/timer.h"	    // *** 2
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -73,15 +71,6 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 bool thread_compare(const struct list_elem* e1, const struct list_elem* e2, void* aux UNUSED);
-void thread_recent_cpu(struct thread *t);
-static int uno = INT_TO_FIXPOINT(1,1);
-static int dos = INT_TO_FIXPOINT(2,1);
-static int cuatro = INT_TO_FIXPOINT(4,1);
-static int cien = INT_TO_FIXPOINT(100,1);
-static int maxima_p= INT_TO_FIXPOINT(PRI_MAX,1);
-static int const1 = INT_TO_FIXPOINT(59, 60);	// *** 3
-static int const2 = INT_TO_FIXPOINT(1, 60);	// *** 4
-static int load_avg = 0;			// *** 5
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -129,58 +118,13 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
-// Función de comparación para poder agregar a la lista
-bool
-thread_compare(const struct list_elem* e1, const struct list_elem* e2, void* aux UNUSED){
-  struct thread* t1 = list_entry(e1, struct thread, elem);
-  struct thread* t2 = list_entry(e2, struct thread, elem);
-
-  return t1-> priority > t2->priority;
-}
-
-// Función que calcula el recent_cpu
-void
-thread_recent_cpu(struct thread *t){
-  t-> recent_cpu = MULT_FP(DIV_FP(MULT_FP(dos, load_avg),
-				  MULT_FP(dos, load_avg) + uno),t->recent_cpu)
-    + t->nice;
-}
-
-// Función que calcula la prioridad de un thread
-void
-thread_priority(struct thread *t){
-  t->priority = maxima_p - DIV_FP(t->recent_cpu, cuatro) -
-    MULT_FP(dos, t->nice);
-  
-}
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
-  t-> recent_cpu = t->recent_cpu + uno;  // Actualizamos el recent_cpu del thread actual
-  if (timer_ticks() % TIMER_FREQ == 0)                    // *** 6 estamos en múltiplo de 1 segundo
-    {	
-      int ready_threads = list_size(&ready_list);	// *** 7 recorre toda la lista y cuenta el número de nodos 
-      if (t != idle_thread) 			        // *** 8 si el thread no es el idle
-	ready_threads++;				// *** 9  	
 
-      int ready_threads_pf = INT_TO_FIXPOINT(ready_threads, 1);	// *** 10 convertido a formato de punto fijo
-    
-      load_avg = MULT_FP(const1, load_avg) + MULT_FP(const2, ready_threads_pf); // *** 11
-
-      // Actualizamos el recent_cpu de cada thread.
-      thread_foreach(thread_recent_cpu, NULL);
-      
-    }
-
-  // Actualizamos la prioridad del thread actual
-  if(timer_ticks() % 4 == 0)
-    {
-      thread_foreach(thread_priority, NULL);
-  }
-  
   /* Update statistics. */
   if (t == idle_thread)
     idle_ticks++;
@@ -190,7 +134,7 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
-  
+
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
@@ -421,8 +365,6 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   /* Not yet implemented. */
-  int aux = INT_TO_FIXPOINT(nice,1);
-  thread_current()->nice = aux;
 }
 
 /* Returns the current thread's nice value. */
@@ -430,7 +372,7 @@ int
 thread_get_nice (void) 
 {
   /* Not yet implemented. */
-  return thread_current()->nice;
+  return 0;
 }
 
 /* Returns 100 times the system load average. */
@@ -438,19 +380,15 @@ int
 thread_get_load_avg (void) 
 {
   /* Not yet implemented. */
-  int tmp = MULT_FP(cien, load_avg);	// *** 11
-  return FIXPOINT_TO_INT(tmp);		// *** 13 
+  return 0;
 }
-
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
   /* Not yet implemented. */
-  int aux = thread_current()->recent_cpu;
-  int tmp = MULT_FP(cien, aux);
-  return FIXPOINT_TO_INT(tmp);
+  return 0;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -652,8 +590,14 @@ allocate_tid (void)
   return tid;
 }
 
+// Firma de la función de comparación para poder agregar a la lista
+bool
+thread_compare(const struct list_elem* e1, const struct list_elem* e2, void* aux UNUSED){
+  struct thread* t1 = list_entry(e1, struct thread, elem);
+  struct thread* t2 = list_entry(e2, struct thread, elem);
 
-
+  return t1-> priority > t2->priority;
+}
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
